@@ -132,6 +132,63 @@ class StockDaily(Base):
         }
 
 
+class CryptoKline(Base):
+    """
+    加密货币 K 线数据模型
+
+    存储 4h 周期 K 线，唯一约束为 (code, datetime)。
+    与 StockDaily 分表，避免日期唯一约束冲突。
+    """
+    __tablename__ = 'crypto_kline'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(20), nullable=False, index=True)
+    open_time = Column(DateTime, nullable=False, index=True)
+
+    open = Column(Float)
+    high = Column(Float)
+    low = Column(Float)
+    close = Column(Float)
+    volume = Column(Float)
+    amount = Column(Float)
+    pct_chg = Column(Float)
+
+    ma5 = Column(Float)
+    ma10 = Column(Float)
+    ma20 = Column(Float)
+    volume_ratio = Column(Float)
+
+    data_source = Column(String(50))
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint('code', 'open_time', name='uix_crypto_code_datetime'),
+        Index('ix_crypto_code_datetime', 'code', 'open_time'),
+    )
+
+    def __repr__(self):
+        return f"<CryptoKline(code={self.code}, open_time={self.open_time}, close={self.close})>"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'code': self.code,
+            'date': self.open_time,
+            'open': self.open,
+            'high': self.high,
+            'low': self.low,
+            'close': self.close,
+            'volume': self.volume,
+            'amount': self.amount,
+            'pct_chg': self.pct_chg,
+            'ma5': self.ma5,
+            'ma10': self.ma10,
+            'ma20': self.ma20,
+            'volume_ratio': self.volume_ratio,
+            'data_source': self.data_source,
+        }
+
+
 class NewsIntel(Base):
     """
     新闻情报数据模型
@@ -1390,9 +1447,113 @@ class DatabaseManager:
                 session.rollback()
                 logger.error(f"保存 {code} 数据失败: {e}")
                 raise
-        
+
         return saved_count
-    
+
+    def save_crypto_kline(self, df: pd.DataFrame, code: str, data_source: str = "BinanceFetcher") -> int:
+        """
+        保存加密货币 K 线数据到 crypto_kline 表（UPSERT）。
+
+        Args:
+            df: 包含 K 线数据的 DataFrame，date 列为 datetime 或 date 对象
+            code: 交易对代码，如 'BTCUSDT'
+            data_source: 数据来源
+
+        Returns:
+            新增记录数
+        """
+        if df is None or df.empty:
+            logger.warning(f"保存加密货币数据为空，跳过 {code}")
+            return 0
+
+        saved_count = 0
+        with self.get_session() as session:
+            try:
+                for _, row in df.iterrows():
+                    row_dt = row.get('date')
+                    if isinstance(row_dt, str):
+                        row_dt = datetime.strptime(row_dt, '%Y-%m-%d %H:%M:%S')
+                    elif isinstance(row_dt, date) and not isinstance(row_dt, datetime):
+                        row_dt = datetime.combine(row_dt, datetime.min.time())
+                    elif isinstance(row_dt, pd.Timestamp):
+                        row_dt = row_dt.to_pydatetime()
+
+                    existing = session.execute(
+                        select(CryptoKline).where(
+                            and_(CryptoKline.code == code, CryptoKline.open_time == row_dt)
+                        )
+                    ).scalar_one_or_none()
+
+                    if existing:
+                        existing.open = row.get('open')
+                        existing.high = row.get('high')
+                        existing.low = row.get('low')
+                        existing.close = row.get('close')
+                        existing.volume = row.get('volume')
+                        existing.amount = row.get('amount')
+                        existing.pct_chg = row.get('pct_chg')
+                        existing.ma5 = row.get('ma5')
+                        existing.ma10 = row.get('ma10')
+                        existing.ma20 = row.get('ma20')
+                        existing.volume_ratio = row.get('volume_ratio')
+                        existing.data_source = data_source
+                        existing.updated_at = datetime.now()
+                    else:
+                        record = CryptoKline(
+                            code=code,
+                            open_time=row_dt,
+                            open=row.get('open'),
+                            high=row.get('high'),
+                            low=row.get('low'),
+                            close=row.get('close'),
+                            volume=row.get('volume'),
+                            amount=row.get('amount'),
+                            pct_chg=row.get('pct_chg'),
+                            ma5=row.get('ma5'),
+                            ma10=row.get('ma10'),
+                            ma20=row.get('ma20'),
+                            volume_ratio=row.get('volume_ratio'),
+                            data_source=data_source,
+                        )
+                        session.add(record)
+                        saved_count += 1
+
+                session.commit()
+                logger.info(f"保存 {code} 加密货币 K 线成功，新增 {saved_count} 条")
+            except Exception as e:
+                session.rollback()
+                logger.error(f"保存 {code} 加密货币 K 线失败: {e}")
+                raise
+
+        return saved_count
+
+    def get_crypto_kline(self, code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
+        """
+        从 crypto_kline 表读取 K 线数据，返回与 STANDARD_COLUMNS 兼容的 DataFrame。
+
+        Args:
+            code: 交易对代码
+            start_date: 开始日期 'YYYY-MM-DD'
+            end_date: 结束日期 'YYYY-MM-DD'
+
+        Returns:
+            DataFrame，date 列为 datetime
+        """
+        with self.get_session() as session:
+            query = select(CryptoKline).where(CryptoKline.code == code)
+            if start_date:
+                query = query.where(CryptoKline.open_time >= datetime.strptime(start_date, '%Y-%m-%d'))
+            if end_date:
+                query = query.where(CryptoKline.open_time <= datetime.strptime(end_date + ' 23:59:59', '%Y-%m-%d %H:%M:%S'))
+            query = query.order_by(CryptoKline.open_time)
+            rows = session.execute(query).scalars().all()
+
+        if not rows:
+            return pd.DataFrame()
+
+        records = [r.to_dict() for r in rows]
+        return pd.DataFrame(records)
+
     def get_analysis_context(
         self, 
         code: str,

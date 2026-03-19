@@ -156,15 +156,32 @@ class StockAnalysisPipeline:
                 logger.info(f"{stock_name}({code}) 今日数据已存在，跳过获取（断点续传）")
                 return True, None
 
-            # 从数据源获取数据
+            # 从数据源获取数据（最多重试3次，间隔10s/20s）
             logger.info(f"{stock_name}({code}) 开始从数据源获取数据...")
-            df, source_name = self.fetcher_manager.get_daily_data(code, days=30)
+            df, source_name = None, None
+            _retry_delays = [0, 10, 20]
+            for _attempt, _delay in enumerate(_retry_delays):
+                if _delay > 0:
+                    logger.warning(f"{stock_name}({code}) K线获取失败，{_delay}s 后重试 ({_attempt}/{len(_retry_delays)-1})...")
+                    time.sleep(_delay)
+                try:
+                    df, source_name = self.fetcher_manager.get_daily_data(code, days=30)
+                    if df is not None and not df.empty:
+                        break
+                except Exception as _e:
+                    if _attempt == len(_retry_delays) - 1:
+                        raise
+                    logger.warning(f"{stock_name}({code}) K线获取异常: {_e}")
 
             if df is None or df.empty:
                 return False, "获取数据为空"
 
-            # 保存到数据库
-            saved_count = self.db.save_daily_data(df, code, source_name)
+            # 保存到数据库（加密货币走专用表）
+            from data_provider.crypto_mapping import is_crypto_code
+            if is_crypto_code(code):
+                saved_count = self.db.save_crypto_kline(df, code, source_name)
+            else:
+                saved_count = self.db.save_daily_data(df, code, source_name)
             logger.info(f"{stock_name}({code}) 数据保存成功（来源: {source_name}，新增 {saved_count} 条）")
 
             return True, None
@@ -224,7 +241,12 @@ class StockAnalysisPipeline:
             # Step 2: 获取筹码分布 - 使用统一入口，带熔断保护
             chip_data = None
             try:
-                chip_data = self.fetcher_manager.get_chip_distribution(code)
+                from data_provider.crypto_mapping import is_crypto_code
+                if is_crypto_code(code):
+                    chip_data = None
+                    logger.debug(f"{stock_name}({code}) 加密货币跳过筹码分布")
+                else:
+                    chip_data = self.fetcher_manager.get_chip_distribution(code)
                 if chip_data:
                     logger.info(f"{stock_name}({code}) 筹码分布: 获利比例={chip_data.profit_ratio:.1%}, "
                               f"90%集中度={chip_data.concentration_90:.2%}")
