@@ -234,8 +234,9 @@ get_realtime_quote_tool = ToolDefinition(
 
 def _handle_get_daily_history(stock_code: str, days: int = 60) -> dict:
     """Get daily OHLCV history data."""
-    manager = _get_fetcher_manager()
-    df, source = manager.get_daily_data(stock_code, days=days)
+    from src.agent.tools.analysis_tools import _fetch_trend_data
+    df = _fetch_trend_data(stock_code)
+    source = "db"
 
     if df is None or df.empty:
         return {"error": f"No historical data available for {stock_code}"}

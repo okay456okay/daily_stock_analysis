@@ -30,8 +30,12 @@ def _fetch_trend_data(stock_code: str):
 
     # 1. Try DB
     try:
+        from data_provider.crypto_mapping import is_crypto_code
         db = get_db()
-        bars = db.get_data_range(code, start_date, end_date)
+        if is_crypto_code(code):
+            bars = db.get_crypto_data_range(code, start_date, end_date)
+        else:
+            bars = db.get_data_range(code, start_date, end_date)
         if bars:
             df = pd.DataFrame([b.to_dict() for b in bars])
             logger.debug("analyze_trend(%s): loaded %d rows from DB", stock_code, len(df))
@@ -143,11 +147,10 @@ analyze_trend_tool = ToolDefinition(
 
 def _handle_calculate_ma(stock_code: str, periods: Optional[str] = None, days: int = 120) -> dict:
     """Calculate moving averages for arbitrary periods from historical K-line data."""
-    from data_provider import DataFetcherManager
     import pandas as pd
 
-    manager = DataFetcherManager()
-    df, source = manager.get_daily_data(stock_code, days=days)
+    df = _fetch_trend_data(stock_code)
+    source = "db"
 
     if df is None or df.empty:
         return {"error": f"No historical data for {stock_code}"}
@@ -236,11 +239,9 @@ calculate_ma_tool = ToolDefinition(
 
 def _handle_get_volume_analysis(stock_code: str, days: int = 30) -> dict:
     """Analyse volume-price patterns over recent trading days."""
-    from data_provider import DataFetcherManager
     import pandas as pd
 
-    manager = DataFetcherManager()
-    df, source = manager.get_daily_data(stock_code, days=max(days + 20, 60))
+    df = _fetch_trend_data(stock_code)
 
     if df is None or df.empty:
         return {"error": f"No historical data for {stock_code}"}
@@ -353,11 +354,9 @@ get_volume_analysis_tool = ToolDefinition(
 
 def _handle_analyze_pattern(stock_code: str, days: int = 60) -> dict:
     """Detect common candlestick and chart patterns in recent price history."""
-    from data_provider import DataFetcherManager
     import pandas as pd
 
-    manager = DataFetcherManager()
-    df, source = manager.get_daily_data(stock_code, days=max(days, 120))
+    df = _fetch_trend_data(stock_code)
 
     if df is None or df.empty:
         return {"error": f"No historical data for {stock_code}"}

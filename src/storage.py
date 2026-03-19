@@ -1354,7 +1354,28 @@ class DatabaseManager:
             ).scalars().all()
             
             return list(results)
-    
+
+    def get_crypto_data_range(
+        self,
+        code: str,
+        start_date: date,
+        end_date: date,
+    ) -> List[CryptoKline]:
+        """获取加密货币 K 线数据（crypto_kline 表）"""
+        with self.get_session() as session:
+            results = session.execute(
+                select(CryptoKline)
+                .where(
+                    and_(
+                        CryptoKline.code == code,
+                        CryptoKline.open_time >= datetime.combine(start_date, datetime.min.time()),
+                        CryptoKline.open_time <= datetime.combine(end_date, datetime.max.time()),
+                    )
+                )
+                .order_by(CryptoKline.open_time)
+            ).scalars().all()
+            return list(results)
+
     def save_daily_data(
         self, 
         df: pd.DataFrame, 
