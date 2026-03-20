@@ -112,6 +112,7 @@
 | `CUSTOM_WEBHOOK_BEARER_TOKEN` | 自定義 Webhook 的 Bearer Token（用於需要認證的 Webhook） | 可選 |
 | `SINGLE_STOCK_NOTIFY` | 單股推送模式：設為 `true` 則每分析完一隻股票立即推送 | 可選 |
 | `REPORT_TYPE` | 報告類型：`simple`(精簡) 或 `full`(完整)，Docker環境推薦設為 `full` | 可選 |
+| `REPORT_LANGUAGE` | 報告輸出語言：`zh`(預設中文) / `en`(英文)；會同步影響 Prompt、Markdown 模板、通知 fallback 與 Web 報告頁固定文案 | 可選 |
 | `ANALYSIS_DELAY` | 個股分析和大盤分析之間的延遲（秒），避免API限流，如 `10` | 可選 |
 
 > 至少配置一個渠道，配置多個則同時推送。更多配置請參考 [完整指南](full-guide.md)

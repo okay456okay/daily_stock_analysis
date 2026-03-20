@@ -94,6 +94,7 @@ daily_stock_analysis/
 |------------|------|:----:|
 | `SINGLE_STOCK_NOTIFY` | 单股推送模式：设为 `true` 则每分析完一只股票立即推送 | 可选 |
 | `REPORT_TYPE` | 报告类型：`simple`(精简)、`full`(完整)、`brief`(3-5句概括)，Docker环境推荐设为 `full` | 可选 |
+| `REPORT_LANGUAGE` | 报告输出语言：`zh`(默认中文) / `en`(英文)；会同步影响 Prompt、模板、通知 fallback 与 Web 报告页固定文案 | 可选 |
 | `REPORT_SUMMARY_ONLY` | 仅分析结果摘要：设为 `true` 时只推送汇总，不含个股详情；多股时适合快速浏览（默认 false，Issue #262） | 可选 |
 | `REPORT_TEMPLATES_DIR` | Jinja2 模板目录（相对项目根，默认 `templates`） | 可选 |
 | `REPORT_RENDERER_ENABLED` | 启用 Jinja2 模板渲染（默认 `false`，保证零回归） | 可选 |
@@ -1044,6 +1045,8 @@ A: 检查是否启用了 Actions，以及 cron 表达式是否正确（注意是
   - event list panel with filters and pagination
   - single-account scoped event deletion for trade / cash / corporate action correction
   - broker selector fallback to built-in brokers (`huatai/citic/cmb`) when broker list API fails or returns empty
+  - FX status card manual refresh action that calls existing `POST /api/v1/portfolio/fx/refresh`; if upstream FX fetch fails, the page may still show stale after refresh and will explain the result inline
+  - when `PORTFOLIO_FX_UPDATE_ENABLED=false`, the refresh API now returns explicit disabled status and the page will show “汇率在线刷新已被禁用” instead of “当前范围无可刷新的汇率对”
 
 ### Risk sector concentration semantics
 - Added `sector_concentration` in `GET /api/v1/portfolio/risk`.

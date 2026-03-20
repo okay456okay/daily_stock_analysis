@@ -1,13 +1,15 @@
 import type React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { getSentimentLabel } from '../../types/analysis';
+import { getSentimentLabel, type ReportLanguage } from '../../types/analysis';
 import { cn } from '../../utils/cn';
+import { normalizeReportLanguage, getReportText } from '../../utils/reportLanguage';
 
 interface ScoreGaugeProps {
   score: number;
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   className?: string;
+  language?: ReportLanguage;
 }
 
 /**
@@ -19,6 +21,7 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
   size = 'md',
   showLabel = true,
   className = '',
+  language = 'zh',
 }) => {
   // Animated score state.
   const [animatedScore, setAnimatedScore] = useState(0);
@@ -60,7 +63,9 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
     };
   }, [score]);
 
-  const label = getSentimentLabel(score);
+  const reportLanguage = normalizeReportLanguage(language);
+  const text = getReportText(reportLanguage);
+  const label = getSentimentLabel(score, reportLanguage);
 
   // Size configuration for each gauge variant.
   const sizeConfig = {
@@ -115,7 +120,7 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
     <div className={cn('flex flex-col items-center', className)}>
       {showLabel && (
         <span className="label-uppercase mb-3 text-secondary-text">
-          恐惧贪婪指数
+          {text.fearGreedIndex}
         </span>
       )}
 

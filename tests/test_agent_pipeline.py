@@ -602,6 +602,45 @@ class TestAgentConstructionChain(unittest.TestCase):
         self.assertEqual(calls, ["openai/gpt-4o-mini", "anthropic/claude-3-5-sonnet-20241022"])
         self.assertEqual(result.content, "ok")
 
+    @patch("src.agent.llm_adapter.Router")
+    def test_llm_adapter_recomputes_timeout_for_each_fallback_attempt(self, _mock_router):
+        """Each fallback model attempt should receive only the remaining timeout budget."""
+        mock_cfg = MagicMock()
+        mock_cfg.agent_litellm_model = "gpt-4o-mini"
+        mock_cfg.litellm_model = None
+        mock_cfg.litellm_fallback_models = ["anthropic/claude-3-5-sonnet-20241022"]
+        mock_cfg.llm_model_list = []
+        mock_cfg.llm_temperature = 0.7
+        mock_cfg.gemini_api_keys = []
+        mock_cfg.anthropic_api_keys = []
+        mock_cfg.openai_api_keys = []
+        mock_cfg.deepseek_api_keys = []
+        mock_cfg.openai_base_url = None
+
+        from src.agent.llm_adapter import LLMToolAdapter
+        adapter = LLMToolAdapter(config=mock_cfg)
+
+        timeouts = []
+
+        def fake_call(_messages, _tools, model, **kwargs):
+            timeouts.append((model, kwargs.get("timeout")))
+            if model == "openai/gpt-4o-mini":
+                raise RuntimeError("primary failed")
+            return MagicMock(content="ok")
+
+        adapter._call_litellm_model = MagicMock(side_effect=fake_call)
+
+        with patch("src.agent.llm_adapter.time.time", side_effect=[0.0, 0.0, 7.0, 7.0]):
+            result = adapter.call_completion(
+                messages=[{"role": "user", "content": "hi"}],
+                tools=[],
+                timeout=10.0,
+            )
+
+        self.assertEqual(result.content, "ok")
+        self.assertEqual(timeouts[0], ("openai/gpt-4o-mini", 10.0))
+        self.assertEqual(timeouts[1], ("anthropic/claude-3-5-sonnet-20241022", 3.0))
+
 
 # ============================================================
 # _safe_int tests

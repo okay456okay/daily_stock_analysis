@@ -4,12 +4,15 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { historyApi } from '../../api/history';
 import { Drawer } from '../common/Drawer';
+import { getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
+import type { ReportLanguage } from '../../types/analysis';
 
 interface ReportMarkdownProps {
   recordId: number;
   stockName: string;
   stockCode: string;
   onClose: () => void;
+  reportLanguage?: ReportLanguage;
 }
 
 /**
@@ -21,7 +24,10 @@ export const ReportMarkdown: React.FC<ReportMarkdownProps> = ({
   stockName,
   stockCode,
   onClose,
+  reportLanguage = 'zh',
 }) => {
+  const text = getReportText(normalizeReportLanguage(reportLanguage));
+  const loadReportFailedText = text.loadReportFailed;
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +53,7 @@ export const ReportMarkdown: React.FC<ReportMarkdownProps> = ({
         }
       } catch (err) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : '加载报告失败');
+          setError(err instanceof Error ? err.message : loadReportFailedText);
         }
       } finally {
         if (isMounted) {
@@ -61,7 +67,7 @@ export const ReportMarkdown: React.FC<ReportMarkdownProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [recordId]);
+  }, [recordId, loadReportFailedText]);
 
   return (
     <Drawer isOpen={isOpen} onClose={handleClose} width="max-w-3xl" zIndex={100}>
@@ -74,7 +80,7 @@ export const ReportMarkdown: React.FC<ReportMarkdownProps> = ({
         </div>
         <div>
           <h2 className="text-base font-semibold text-foreground">{stockName || stockCode}</h2>
-          <p className="text-xs text-muted-text">完整分析报告</p>
+          <p className="text-xs text-muted-text">{text.fullReport}</p>
         </div>
       </div>
 
@@ -82,7 +88,7 @@ export const ReportMarkdown: React.FC<ReportMarkdownProps> = ({
       {isLoading ? (
         <div className="flex flex-col items-center justify-center h-64">
           <div className="home-spinner h-10 w-10 animate-spin border-[3px]" />
-          <p className="mt-4 text-secondary-text text-sm">加载报告中...</p>
+          <p className="mt-4 text-secondary-text text-sm">{text.loadingReport}</p>
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center h-64">
@@ -97,7 +103,7 @@ export const ReportMarkdown: React.FC<ReportMarkdownProps> = ({
             onClick={handleClose}
             className="home-surface-button mt-4 rounded-lg px-4 py-2 text-sm text-secondary-text"
           >
-            关闭
+            {text.dismiss}
           </button>
         </div>
       ) : (
@@ -134,7 +140,7 @@ export const ReportMarkdown: React.FC<ReportMarkdownProps> = ({
           onClick={handleClose}
           className="home-surface-button rounded-lg px-4 py-2 text-sm text-secondary-text hover:text-foreground"
         >
-          关闭
+          {text.dismiss}
         </button>
       </div>
     </Drawer>

@@ -206,11 +206,25 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertEqual(agent_arch_schema["options"][1]["label"], "Multi Agent (Orchestrator)")
         self.assertEqual(agent_arch_schema["validation"]["enum"], ["single", "multi"])
 
+        report_language_schema = items["REPORT_LANGUAGE"]["schema"]
+        self.assertEqual(report_language_schema["validation"]["enum"], ["zh", "en"])
+        self.assertEqual(report_language_schema["options"][1]["value"], "en")
+
+        self.assertEqual(items["AGENT_ORCHESTRATOR_TIMEOUT_S"]["schema"]["default_value"], "600")
+        self.assertFalse(items["AGENT_DEEP_RESEARCH_BUDGET"]["schema"]["is_editable"])
+        self.assertFalse(items["AGENT_EVENT_MONITOR_ENABLED"]["schema"]["is_editable"])
+
     def test_validate_reports_invalid_select_option(self) -> None:
         validation = self.service.validate(items=[{"key": "AGENT_ARCH", "value": "invalid-mode"}])
 
         self.assertFalse(validation["valid"])
         self.assertTrue(any(issue["code"] == "invalid_enum" for issue in validation["issues"]))
+
+    def test_validate_accepts_report_language_english(self) -> None:
+        validation = self.service.validate(items=[{"key": "REPORT_LANGUAGE", "value": "en"}])
+
+        self.assertTrue(validation["valid"])
+        self.assertEqual(validation["issues"], [])
 
     @patch.object(
         Config,

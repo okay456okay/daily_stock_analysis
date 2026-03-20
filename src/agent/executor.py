@@ -22,6 +22,7 @@ from typing import Any, Callable, Dict, List, Optional
 from src.agent.llm_adapter import LLMToolAdapter
 from src.agent.runner import run_agent_loop, parse_dashboard_json
 from src.agent.tools.registry import ToolRegistry
+from src.report_language import normalize_report_language
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,8 @@ AGENT_SYSTEM_PROMPT = """你是一位专注于趋势交易的投资分析 Agent�
 3. **精确狙击点**：必须给出具体价格，不说模糊的话
 4. **检查清单可视化**：用 ✅⚠️❌ 明确显示每项检查结果
 5. **风险优先级**：舆情中的风险点要醒目标出
+
+{language_section}
 """
 
 CHAT_SYSTEM_PROMPT = """你是一位专注于趋势交易的投资分析 Agent，支持 A 股、港股、美股及加密货币市场，拥有数据工具和交易策略，负责解答用户的股票投资问题。
@@ -269,6 +272,44 @@ CHAT_SYSTEM_PROMPT = """你是一位专注于趋势交易的投资分析 Agent�
 5. **工具失败处理** — 记录失败原因，使用已有数据继续分析，不重复调用失败工具。
 
 {skills_section}
+{language_section}
+"""
+
+
+def _build_language_section(report_language: str, *, chat_mode: bool = False) -> str:
+    """Build output-language guidance for the agent prompt."""
+    normalized = normalize_report_language(report_language)
+    if chat_mode:
+        if normalized == "en":
+            return """
+## Output Language
+
+- Reply in English.
+- If you output JSON, keep the keys unchanged and write every human-readable value in English.
+"""
+        return """
+## 输出语言
+
+- 默认使用中文回答。
+- 若输出 JSON，键名保持不变，所有面向用户的文本值使用中文。
+"""
+
+    if normalized == "en":
+        return """
+## Output Language
+
+- Keep every JSON key unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- All human-readable JSON values must be written in English.
+- This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, all dashboard text, checklist items, and summaries.
+"""
+
+    return """
+## 输出语言
+
+- 所有 JSON 键名保持不变。
+- `decision_type` 必须保持为 `buy|hold|sell`。
+- 所有面向用户的人类可读文本值必须使用中文。
 """
 
 
@@ -291,11 +332,13 @@ class AgentExecutor:
         llm_adapter: LLMToolAdapter,
         skill_instructions: str = "",
         max_steps: int = 10,
+        timeout_seconds: Optional[float] = None,
     ):
         self.tool_registry = tool_registry
         self.llm_adapter = llm_adapter
         self.skill_instructions = skill_instructions
         self.max_steps = max_steps
+        self.timeout_seconds = timeout_seconds
 
     def run(self, task: str, context: Optional[Dict[str, Any]] = None) -> AgentResult:
         """Execute the agent loop for a given task.
@@ -311,7 +354,11 @@ class AgentExecutor:
         skills_section = ""
         if self.skill_instructions:
             skills_section = f"## 激活的交易策略\n\n{self.skill_instructions}"
-        system_prompt = AGENT_SYSTEM_PROMPT.format(skills_section=skills_section)
+        report_language = normalize_report_language((context or {}).get("report_language", "zh"))
+        system_prompt = AGENT_SYSTEM_PROMPT.format(
+            skills_section=skills_section,
+            language_section=_build_language_section(report_language),
+        )
 
         # Build tool declarations in OpenAI format (litellm handles all providers)
         tool_decls = self.tool_registry.to_openai_tools()
@@ -342,7 +389,11 @@ class AgentExecutor:
         skills_section = ""
         if self.skill_instructions:
             skills_section = f"## 激活的交易策略\n\n{self.skill_instructions}"
-        system_prompt = CHAT_SYSTEM_PROMPT.format(skills_section=skills_section)
+        report_language = normalize_report_language((context or {}).get("report_language", "zh"))
+        system_prompt = CHAT_SYSTEM_PROMPT.format(
+            skills_section=skills_section,
+            language_section=_build_language_section(report_language, chat_mode=True),
+        )
 
         # Build tool declarations in OpenAI format (litellm handles all providers)
         tool_decls = self.tool_registry.to_openai_tools()
@@ -410,6 +461,7 @@ class AgentExecutor:
             llm_adapter=self.llm_adapter,
             max_steps=self.max_steps,
             progress_callback=progress_callback,
+            max_wall_clock_seconds=self.timeout_seconds,
         )
 
         model_str = loop_result.model
@@ -444,10 +496,15 @@ class AgentExecutor:
         """Build the initial user message."""
         parts = [task]
         if context:
+            report_language = normalize_report_language(context.get("report_language", "zh"))
             if context.get("stock_code"):
                 parts.append(f"\n股票代码: {context['stock_code']}")
             if context.get("report_type"):
                 parts.append(f"报告类型: {context['report_type']}")
+            if report_language == "en":
+                parts.append("输出语言: English（所有 JSON 键名保持不变，所有面向用户的文本值使用英文）")
+            else:
+                parts.append("输出语言: 中文（所有 JSON 键名保持不变，所有面向用户的文本值使用中文）")
 
             # Inject pre-fetched context data to avoid redundant fetches
             if context.get("realtime_quote"):
