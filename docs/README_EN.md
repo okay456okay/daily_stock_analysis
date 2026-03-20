@@ -116,6 +116,7 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 | `SINGLE_STOCK_NOTIFY` | Send notification immediately after each stock | Optional |
 | `REPORT_TYPE` | `simple`, `full`, or `brief` (Docker recommended: `full`) | Optional |
 | `REPORT_LANGUAGE` | Report output language: `zh` (default Chinese) / `en` (English); affects prompt instructions, Markdown templates, notification fallbacks, and fixed labels in the Web report view | Optional |
+| `ANALYSIS_LLM_RETRY` | Retry count when LLM / Agent analysis calls fail; failed results are not saved to history | Optional |
 | `ANALYSIS_DELAY` | Delay between stocks and market review (seconds) | Optional |
 
 > Note: Configure at least one channel; multiple channels will all receive notifications.

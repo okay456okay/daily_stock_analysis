@@ -148,6 +148,25 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 self.fail("未找到保存的历史记录")
             self.assertIsNone(row.context_snapshot)
 
+    def test_save_analysis_history_skips_failed_result(self) -> None:
+        """失败分析结果不应写入 analysis_history。"""
+        result = self._build_result()
+        result.success = False
+        result.error_message = "temporary upstream error"
+
+        saved = self.db.save_analysis_history(
+            result=result,
+            query_id="query_failed_001",
+            report_type="simple",
+            news_content="新闻摘要",
+            context_snapshot=None,
+            save_snapshot=False,
+        )
+
+        self.assertEqual(saved, 0)
+        history = self.db.get_analysis_history(code="600519", days=7, limit=10)
+        self.assertEqual(history, [])
+
     def test_save_analysis_history_persists_model_used(self) -> None:
         """model_used should be persisted in raw_result for history detail."""
         result = self._build_result()

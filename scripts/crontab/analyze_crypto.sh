@@ -24,6 +24,9 @@ PYTHON="${VENV_PYTHON:-python}"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+RUN_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+SUCCESS_SQL_FILTER="(raw_result IS NULL OR (instr(raw_result, '\"success\": false') = 0 AND instr(raw_result, '\"success\":false') = 0))"
+
 # 从 MySQL 获取加密货币标的，格式直接是 BTCUSDT 等，无需转换
 SYMBOLS_RAW=$(mysql -h"$FAV_DB_HOST" -P"$FAV_DB_PORT" -u"$FAV_DB_USER" -p"$FAV_DB_PASSWORD" \
     "$FAV_DB_NAME" --batch --skip-column-names \
@@ -45,12 +48,20 @@ log "加密货币分析完成"
 IFS=',' read -ra SYMBOL_LIST <<< "$SYMBOLS"
 for CODE in "${SYMBOL_LIST[@]}"; do
     RECENT=$(sqlite3 "$SQLITE_DB" \
-        "SELECT trend_prediction FROM analysis_history WHERE code='$CODE' ORDER BY created_at DESC LIMIT 2;")
-    TREND1=$(echo "$RECENT" | sed -n '1p')
-    TREND2=$(echo "$RECENT" | sed -n '2p')
+        "SELECT created_at, trend_prediction FROM analysis_history WHERE code='$CODE' AND $SUCCESS_SQL_FILTER ORDER BY created_at DESC LIMIT 2;")
+    LATEST_LINE=$(echo "$RECENT" | sed -n '1p')
+    PREVIOUS_LINE=$(echo "$RECENT" | sed -n '2p')
+    LATEST_CREATED_AT=$(echo "$LATEST_LINE" | cut -d'|' -f1)
+    TREND1=$(echo "$LATEST_LINE" | cut -d'|' -f2-)
+    TREND2=$(echo "$PREVIOUS_LINE" | cut -d'|' -f2-)
 
-    if [ -z "$TREND1" ]; then
-        log "$CODE: 无分析记录，跳过通知"
+    if [ -z "$LATEST_CREATED_AT" ] || [ -z "$TREND1" ]; then
+        log "$CODE: 无成功分析记录，跳过通知"
+        continue
+    fi
+
+    if [[ "$LATEST_CREATED_AT" < "$RUN_STARTED_AT" ]]; then
+        log "$CODE: 本次无成功分析记录，跳过通知"
         continue
     fi
 
@@ -58,11 +69,11 @@ for CODE in "${SYMBOL_LIST[@]}"; do
         log "$CODE: 趋势变化 $TREND2 -> $TREND1，发送通知"
 
         HISTORY=$(sqlite3 "$SQLITE_DB" \
-            "SELECT created_at, trend_prediction, operation_advice, sentiment_score FROM analysis_history WHERE code='$CODE' ORDER BY created_at DESC LIMIT 5;" \
+            "SELECT created_at, trend_prediction, operation_advice, sentiment_score FROM analysis_history WHERE code='$CODE' AND $SUCCESS_SQL_FILTER ORDER BY created_at DESC LIMIT 5;" \
             | awk -F'|' '{printf "  %s | %s | %s | 评分:%s\n", $1, $2, $3, $4}')
 
         LATEST=$(sqlite3 "$SQLITE_DB" \
-            "SELECT name, trend_prediction, operation_advice, sentiment_score, analysis_summary FROM analysis_history WHERE code='$CODE' ORDER BY created_at DESC LIMIT 1;" \
+            "SELECT name, trend_prediction, operation_advice, sentiment_score, analysis_summary FROM analysis_history WHERE code='$CODE' AND $SUCCESS_SQL_FILTER ORDER BY created_at DESC LIMIT 1;" \
             | awk -F'|' '{printf "名称:%s\n趋势:%s\n建议:%s\n评分:%s\n摘要:%s", $1, $2, $3, $4, $5}')
 
         MSG="【加密货币趋势变化】${CODE}\n趋势: ${TREND2} → ${TREND1}\n\n最近5次分析:\n${HISTORY}\n\n最新详情:\n${LATEST}"

@@ -405,8 +405,23 @@ class StockAnalysisPipeline:
                 fundamental_context,
             )
             
-            # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
-            result = self.analyzer.analyze(enhanced_context, news_context=news_context)
+            # Step 7: 调用 AI 分析（传入增强的上下文和新闻），LLM 失败时重试
+            llm_retry_max = self._get_analysis_llm_retry_max()
+            llm_retry_delays = [10, 20]
+            result = None
+            for llm_attempt in range(llm_retry_max + 1):
+                attempt_result = self.analyzer.analyze(enhanced_context, news_context=news_context)
+                if attempt_result and attempt_result.success:
+                    result = attempt_result
+                    break
+                if llm_attempt < llm_retry_max:
+                    delay = llm_retry_delays[min(llm_attempt, len(llm_retry_delays) - 1)]
+                    logger.warning(
+                        f"{stock_name}({code}) LLM 分析失败，第 {llm_attempt + 1}/{llm_retry_max} 次重试，等待 {delay}s..."
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(f"{stock_name}({code}) LLM 分析全部失败，跳过保存")
 
             # Step 7.5: 填充分析时的价格信息到 result
             if result:
@@ -423,8 +438,8 @@ class StockAnalysisPipeline:
             if result:
                 fill_price_position_if_needed(result, trend_result, realtime_quote)
 
-            # Step 8: 保存分析历史记录
-            if result:
+            # Step 8: 仅在分析成功时保存历史记录
+            if result and result.success:
                 try:
                     context_snapshot = self._build_context_snapshot(
                         enhanced_context=enhanced_context,
@@ -449,6 +464,18 @@ class StockAnalysisPipeline:
             logger.error(f"{stock_name}({code}) 分析失败: {e}")
             logger.exception(f"{stock_name}({code}) 详细错误信息:")
             return None
+
+    def _get_analysis_llm_retry_max(self, default: int = 2) -> int:
+        """Return a safe non-negative retry count for analysis LLM calls."""
+        value = getattr(self.config, "analysis_llm_retry", default)
+        if isinstance(value, int):
+            return max(0, value)
+        if isinstance(value, str):
+            try:
+                return max(0, int(value.strip()))
+            except ValueError:
+                return default
+        return default
     
     def _enhance_context(
         self,
@@ -632,9 +659,6 @@ class StockAnalysisPipeline:
             from src.agent.factory import build_agent_executor
             report_language = normalize_report_language(getattr(self.config, "report_language", "zh"))
 
-            # Build executor from shared factory (ToolRegistry and SkillManager prototype are cached)
-            executor = build_agent_executor(self.config, getattr(self.config, 'agent_skills', None) or None)
-
             # Build initial context to avoid redundant tool calls
             initial_context = {
                 "stock_code": code,
@@ -672,13 +696,66 @@ class StockAnalysisPipeline:
                 message = f"Analyze stock {code} ({stock_name}) and return the full decision dashboard JSON in English."
             else:
                 message = f"请分析股票 {code} ({stock_name})，并生成决策仪表盘报告。"
-            agent_result = executor.run(message, context=initial_context)
 
-            # 转换为 AnalysisResult
-            result = self._agent_result_to_analysis_result(agent_result, code, stock_name, report_type, query_id)
+            llm_retry_max = self._get_analysis_llm_retry_max()
+            llm_retry_delays = [10, 20]
+            result = None
+            for llm_attempt in range(llm_retry_max + 1):
+                try:
+                    executor = build_agent_executor(
+                        self.config,
+                        getattr(self.config, "agent_skills", None) or None,
+                    )
+                    agent_result = executor.run(message, context=initial_context)
+                    attempt_result = self._agent_result_to_analysis_result(
+                        agent_result,
+                        code,
+                        stock_name,
+                        report_type,
+                        query_id,
+                    )
+                except Exception as agent_exc:
+                    logger.warning(
+                        "[%s] Agent LLM 调用失败，第 %d/%d 次尝试: %s",
+                        code,
+                        llm_attempt + 1,
+                        llm_retry_max + 1,
+                        agent_exc,
+                    )
+                    attempt_result = AnalysisResult(
+                        code=code,
+                        name=stock_name,
+                        sentiment_score=50,
+                        trend_prediction="Unknown" if report_language == "en" else "未知",
+                        operation_advice="Watch" if report_language == "en" else "观望",
+                        confidence_level=localize_confidence_level("medium", report_language),
+                        report_language=report_language,
+                        success=False,
+                        error_message=str(agent_exc),
+                        data_sources="agent:error",
+                        model_used=None,
+                    )
+
+                result = attempt_result
+                if attempt_result and attempt_result.success:
+                    break
+                if llm_attempt < llm_retry_max:
+                    delay = llm_retry_delays[min(llm_attempt, len(llm_retry_delays) - 1)]
+                    logger.warning(
+                        "%s(%s) Agent LLM 分析失败，第 %d/%d 次重试，等待 %ss...",
+                        stock_name,
+                        code,
+                        llm_attempt + 1,
+                        llm_retry_max,
+                        delay,
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error("%s(%s) Agent LLM 分析全部失败，不写入历史记录", stock_name, code)
+
             if result:
                 result.query_id = query_id
-            # Agent weak integrity: placeholder fill only, no LLM retry
+            # Agent weak integrity: placeholder fill only (LLM failure retry is handled above)
             if result and getattr(self.config, "report_integrity_enabled", False):
                 from src.analyzer import check_content_integrity, apply_placeholder_fill
 
@@ -723,7 +800,7 @@ class StockAnalysisPipeline:
                     logger.warning(f"[{code}] Agent 模式保存新闻情报失败: {e}")
 
             # 保存分析历史记录
-            if result:
+            if result and result.success:
                 try:
                     initial_context["stock_name"] = resolved_stock_name
                     self.db.save_analysis_history(

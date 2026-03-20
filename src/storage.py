@@ -1126,6 +1126,14 @@ class DatabaseManager:
         """
         if result is None:
             return 0
+        if getattr(result, "success", True) is False:
+            logger.info(
+                "跳过保存失败的分析历史: code=%s query_id=%s error=%s",
+                getattr(result, "code", ""),
+                query_id,
+                getattr(result, "error_message", None),
+            )
+            return 0
 
         sniper_points = self._extract_sniper_points(result)
         raw_result = self._build_raw_result(result)

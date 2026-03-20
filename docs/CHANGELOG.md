@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### 修复
 
+- 🤖 **失败分析结果不再污染趋势检测链路** — `analysis_history` 现在跳过保存 `success=false` 的失败占位结果，Agent 分析链路补齐 `ANALYSIS_LLM_RETRY` 重试；`scripts/crontab/analyze_{cn,hk,us,crypto}.sh` 也只会基于成功记录判断趋势变化，并要求最新成功记录属于本轮运行，避免 `未知 -> 看多` 这类误报或失败轮次重复推送旧变化。
 - 🌍 **补齐 `REPORT_LANGUAGE` 启动解析与历史展示本地化边界** — `Config` 在启动时继续遵循“真实环境变量优先、`.env` 兜底”的既有语义，并在两者冲突时输出显式告警，减少 `REPORT_LANGUAGE` 来源不清带来的误判；同时 `/api/v1/history/{id}` 英文详情响应会同步本地化 `sentiment_label`，历史 Markdown 也会正确识别英文 `bias_status` 的风险等级 emoji，避免出现 `乐观` 或 `🚨Safe` 这类中英混排/误报展示。
 
 ### 新功能
