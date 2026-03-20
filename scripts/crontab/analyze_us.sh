@@ -12,12 +12,12 @@ set -a
 [ -f .env ] && source .env
 set +a
 
-DB_HOST="${DB_HOST:-127.0.0.1}"
-DB_PORT="${DB_PORT:-3306}"
-DB_USER="${DB_USER:-openclaw_trade_tianji}"
-DB_PASSWORD="${DB_PASSWORD:-}"
-DB_NAME="${DB_NAME:-openclaw_trade_tianji}"
-DB_TABLE="${DB_TABLE:-symbols}"
+FAV_DB_HOST="${FAV_DB_HOST:-127.0.0.1}"
+FAV_DB_PORT="${FAV_DB_PORT:-3306}"
+FAV_DB_USER="${FAV_DB_USER:-openclaw_trade_tianji}"
+FAV_DB_PASSWORD="${FAV_DB_PASSWORD:-}"
+FAV_DB_NAME="${FAV_DB_NAME:-openclaw_trade_tianji}"
+FAV_DB_TABLE="${FAV_DB_TABLE:-symbols}"
 SQLITE_DB="data/stock_analysis.db"
 VENV_PYTHON="${PROJECT_DIR}/venv/bin/python"
 PYTHON="${VENV_PYTHON:-python}"
@@ -25,9 +25,9 @@ PYTHON="${VENV_PYTHON:-python}"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 # 从 MySQL 获取美股标的，格式直接是 NVDA/META 等，无需转换
-SYMBOLS_RAW=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" \
-    "$DB_NAME" --batch --skip-column-names \
-    -e "SELECT symbol FROM ${DB_TABLE} WHERE market='us' AND active=1;" 2>/dev/null)
+SYMBOLS_RAW=$(mysql -h"$FAV_DB_HOST" -P"$FAV_DB_PORT" -u"$FAV_DB_USER" -p"$FAV_DB_PASSWORD" \
+    "$FAV_DB_NAME" --batch --skip-column-names \
+    -e "SELECT symbol FROM ${FAV_DB_TABLE} WHERE market='us' AND active=1;" 2>/dev/null)
 
 if [ -z "$SYMBOLS_RAW" ]; then
     log "ERROR: 未获取到美股标的"
