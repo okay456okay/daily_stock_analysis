@@ -1,0 +1,21 @@
+# 股票智能分析系统 - crontab 任务列表
+# 使用方法：crontab -e 后粘贴以下内容，或 crontab scripts/crontab/crontab.txt
+#
+# 注意：
+# 1. 将 /path/to/project 替换为实际项目路径
+# 2. 日志输出到 logs/cron_*.log
+# 3. 时区以服务器本地时间为准（A股/港股=北京时间，美股=北京时间次日凌晨）
+
+PROJECT=/path/to/daily_stock_analysis1
+
+# A股：周一到周五 20:00
+0 20 * * 1-5 $PROJECT/scripts/crontab/analyze_cn.sh >> $PROJECT/logs/cron_cn.log 2>&1
+
+# 港股：周一到周五 20:00
+0 20 * * 1-5 $PROJECT/scripts/crontab/analyze_hk.sh >> $PROJECT/logs/cron_hk.log 2>&1
+
+# 美股：周二到周六 11:00（对应美东时间前一天收盘后）
+0 11 * * 2-6 $PROJECT/scripts/crontab/analyze_us.sh >> $PROJECT/logs/cron_us.log 2>&1
+
+# 加密货币：每天 0:15, 4:15, 8:15, 12:15, 16:15, 20:15
+15 0,4,8,12,16,20 * * * $PROJECT/scripts/crontab/analyze_crypto.sh >> $PROJECT/logs/cron_crypto.log 2>&1
