@@ -121,11 +121,18 @@ class NotificationService(
     注意：所有已配置的渠道都会收到推送
     """
     
-    def __init__(self, source_message: Optional[BotMessage] = None):
+    def __init__(
+        self,
+        source_message: Optional[BotMessage] = None,
+        *,
+        initialize_channels: bool = True,
+    ):
         """
         初始化通知服务
         
-        检测所有已配置的渠道，推送时会向所有渠道发送
+        检测所有已配置的渠道，推送时会向所有渠道发送。
+        initialize_channels=False 时仅初始化格式化相关状态，
+        适用于离线生成通知内容而不实际选路/发送。
         """
         config = get_config()
         self._source_message = source_message
@@ -142,6 +149,10 @@ class NotificationService(
         # 仅分析结果摘要（Issue #262）：true 时只推送汇总，不含个股详情
         self._report_summary_only = getattr(config, 'report_summary_only', False)
         self._history_compare_cache: Dict[Tuple[int, Tuple[Tuple[str, str], ...]], Dict[str, List[Dict[str, Any]]]] = {}
+
+        if not initialize_channels:
+            self._available_channels = []
+            return
 
         # 初始化各渠道
         AstrbotSender.__init__(self, config)
@@ -757,6 +768,23 @@ class NotificationService(
             result.sentiment_score,
             self._get_report_language(result),
         )
+
+    def _is_news_or_sentiment_related_text(self, value: Any) -> bool:
+        """Return True when a text snippet is clearly news/sentiment related."""
+        text = str(value or "").strip().lower()
+        if not text:
+            return False
+        keywords = (
+            "新闻",
+            "舆情",
+            "消息",
+            "公告",
+            "headline",
+            "headlines",
+            "news",
+            "sentiment",
+        )
+        return any(keyword in text for keyword in keywords)
     
     def generate_dashboard_report(
         self,
@@ -1058,6 +1086,126 @@ class NotificationService(
         
         return "\n".join(report_lines)
     
+    def _build_wechat_stock_digest(
+        self,
+        result: AnalysisResult,
+        *,
+        include_title: bool = True,
+        include_separator: bool = True,
+        include_info_lines: bool = True,
+        exclude_news_related_items: bool = False,
+        preserve_sniper_reason: bool = False,
+        multiline_sniper_points: bool = False,
+    ) -> List[str]:
+        """Build the compact WeChat digest block for a single stock."""
+        report_language = self._get_report_language(result)
+        labels = get_report_labels(report_language)
+        signal_text, signal_emoji, _ = self._get_signal_level(result)
+        dashboard = result.dashboard if hasattr(result, 'dashboard') and result.dashboard else {}
+        core = dashboard.get('core_conclusion', {}) if dashboard else {}
+        battle = dashboard.get('battle_plan', {}) if dashboard else {}
+        intel = dashboard.get('intelligence', {}) if dashboard else {}
+
+        lines: List[str] = []
+        stock_name = self._get_display_name(result, report_language)
+
+        if include_title:
+            lines.append(f"### {signal_emoji} **{signal_text}** | {stock_name}({result.code})")
+            lines.append("")
+
+        one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary
+        if one_sentence:
+            lines.append(f"📌 **{one_sentence[:80]}**")
+            lines.append("")
+
+        info_lines = []
+        if include_info_lines and intel.get('earnings_outlook'):
+            outlook = str(intel['earnings_outlook'])[:60]
+            info_lines.append(f"📊 {labels['earnings_outlook_label']}: {outlook}")
+        if include_info_lines and intel.get('sentiment_summary'):
+            sentiment = str(intel['sentiment_summary'])[:50]
+            info_lines.append(f"💭 {labels['sentiment_summary_label']}: {sentiment}")
+        if info_lines:
+            lines.extend(info_lines)
+            lines.append("")
+
+        risks = intel.get('risk_alerts', []) if intel else []
+        if exclude_news_related_items:
+            risks = [risk for risk in risks if not self._is_news_or_sentiment_related_text(risk)]
+        if risks:
+            lines.append(f"🚨 **{labels['risk_alerts_label']}**:")
+            for risk in risks[:2]:
+                risk_str = str(risk)
+                risk_text = risk_str[:50] + "..." if len(risk_str) > 50 else risk_str
+                lines.append(f"   • {risk_text}")
+            lines.append("")
+
+        catalysts = intel.get('positive_catalysts', []) if intel else []
+        if exclude_news_related_items:
+            catalysts = [
+                cat for cat in catalysts if not self._is_news_or_sentiment_related_text(cat)
+            ]
+        if catalysts:
+            lines.append(f"✨ **{labels['positive_catalysts_label']}**:")
+            for cat in catalysts[:2]:
+                cat_str = str(cat)
+                cat_text = cat_str[:50] + "..." if len(cat_str) > 50 else cat_str
+                lines.append(f"   • {cat_text}")
+            lines.append("")
+
+        sniper = battle.get('sniper_points', {}) if battle else {}
+        if sniper:
+            ideal_buy = str(sniper.get('ideal_buy', ''))
+            stop_loss = str(sniper.get('stop_loss', ''))
+            take_profit = str(sniper.get('take_profit', ''))
+            if not preserve_sniper_reason:
+                ideal_buy = ideal_buy[:15]
+                stop_loss = stop_loss[:15]
+                take_profit = take_profit[:15]
+            points = []
+            if ideal_buy:
+                points.append(f"🎯{labels['ideal_buy_label']}:{ideal_buy}")
+            if stop_loss:
+                points.append(f"🛑{labels['stop_loss_label']}:{stop_loss}")
+            if take_profit:
+                points.append(f"🎊{labels['take_profit_label']}:{take_profit}")
+            if points:
+                if multiline_sniper_points:
+                    lines.extend(points)
+                else:
+                    lines.append(" | ".join(points))
+                lines.append("")
+
+        pos_advice = core.get('position_advice', {}) if core else {}
+        if pos_advice:
+            no_pos = str(pos_advice.get('no_position', ''))
+            has_pos = str(pos_advice.get('has_position', ''))
+            if no_pos:
+                lines.append(f"🆕 {labels['no_position_label']}: {no_pos[:50]}")
+            if has_pos:
+                lines.append(f"💼 {labels['has_position_label']}: {has_pos[:50]}")
+            lines.append("")
+
+        checklist = battle.get('action_checklist', []) if battle else []
+        if exclude_news_related_items:
+            checklist = [
+                item for item in checklist
+                if not self._is_news_or_sentiment_related_text(item)
+            ]
+        if checklist:
+            failed_checks = [str(c) for c in checklist if str(c).startswith('❌') or str(c).startswith('⚠️')]
+            if failed_checks:
+                lines.append(f"**{labels['failed_checks_heading']}**:")
+                for check in failed_checks[:3]:
+                    lines.append(f"   {check[:40]}")
+                lines.append("")
+
+        if include_separator:
+            lines.append("---")
+            lines.append("")
+
+        return lines
+
     def generate_wechat_dashboard(self, results: List[AnalysisResult]) -> str:
         """
         生成企业微信决策仪表盘精简版（控制在4000字符内）
@@ -1118,101 +1266,8 @@ class NotificationService(
                 )
         else:
             for result in sorted_results:
-                signal_text, signal_emoji, _ = self._get_signal_level(result)
-                dashboard = result.dashboard if hasattr(result, 'dashboard') and result.dashboard else {}
-                core = dashboard.get('core_conclusion', {}) if dashboard else {}
-                battle = dashboard.get('battle_plan', {}) if dashboard else {}
-                intel = dashboard.get('intelligence', {}) if dashboard else {}
-                
-                # 股票名称
-                stock_name = self._get_display_name(result, report_language)
-                
-                # 标题行：信号等级 + 股票名称
-                lines.append(f"### {signal_emoji} **{signal_text}** | {stock_name}({result.code})")
-                lines.append("")
-                
-                # 核心决策（一句话）
-                one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary
-                if one_sentence:
-                    lines.append(f"📌 **{one_sentence[:80]}**")
-                    lines.append("")
-                
-                # 重要信息区（舆情+基本面）
-                info_lines = []
-                
-                # 业绩预期
-                if intel.get('earnings_outlook'):
-                    outlook = str(intel['earnings_outlook'])[:60]
-                    info_lines.append(f"📊 {labels['earnings_outlook_label']}: {outlook}")
-                if intel.get('sentiment_summary'):
-                    sentiment = str(intel['sentiment_summary'])[:50]
-                    info_lines.append(f"💭 {labels['sentiment_summary_label']}: {sentiment}")
-                if info_lines:
-                    lines.extend(info_lines)
-                    lines.append("")
-                
-                # 风险警报（最重要，醒目显示）
-                risks = intel.get('risk_alerts', []) if intel else []
-                if risks:
-                    lines.append(f"🚨 **{labels['risk_alerts_label']}**:")
-                    for risk in risks[:2]:  # 最多显示2条
-                        risk_str = str(risk)
-                        risk_text = risk_str[:50] + "..." if len(risk_str) > 50 else risk_str
-                        lines.append(f"   • {risk_text}")
-                    lines.append("")
-                
-                # 利好催化
-                catalysts = intel.get('positive_catalysts', []) if intel else []
-                if catalysts:
-                    lines.append(f"✨ **{labels['positive_catalysts_label']}**:")
-                    for cat in catalysts[:2]:  # 最多显示2条
-                        cat_str = str(cat)
-                        cat_text = cat_str[:50] + "..." if len(cat_str) > 50 else cat_str
-                        lines.append(f"   • {cat_text}")
-                    lines.append("")
-                
-                # 狙击点位
-                sniper = battle.get('sniper_points', {}) if battle else {}
-                if sniper:
-                    ideal_buy = str(sniper.get('ideal_buy', ''))
-                    stop_loss = str(sniper.get('stop_loss', ''))
-                    take_profit = str(sniper.get('take_profit', ''))
-                    points = []
-                    if ideal_buy:
-                        points.append(f"🎯{labels['ideal_buy_label']}:{ideal_buy[:15]}")
-                    if stop_loss:
-                        points.append(f"🛑{labels['stop_loss_label']}:{stop_loss[:15]}")
-                    if take_profit:
-                        points.append(f"🎊{labels['take_profit_label']}:{take_profit[:15]}")
-                    if points:
-                        lines.append(" | ".join(points))
-                        lines.append("")
-                
-                # 持仓建议
-                pos_advice = core.get('position_advice', {}) if core else {}
-                if pos_advice:
-                    no_pos = str(pos_advice.get('no_position', ''))
-                    has_pos = str(pos_advice.get('has_position', ''))
-                    if no_pos:
-                        lines.append(f"🆕 {labels['no_position_label']}: {no_pos[:50]}")
-                    if has_pos:
-                        lines.append(f"💼 {labels['has_position_label']}: {has_pos[:50]}")
-                    lines.append("")
-                
-                # 检查清单简化版
-                checklist = battle.get('action_checklist', []) if battle else []
-                if checklist:
-                    # 只显示不通过的项目
-                    failed_checks = [str(c) for c in checklist if str(c).startswith('❌') or str(c).startswith('⚠️')]
-                    if failed_checks:
-                        lines.append(f"**{labels['failed_checks_heading']}**:")
-                        for check in failed_checks[:3]:
-                            lines.append(f"   {check[:40]}")
-                        lines.append("")
-                
-                lines.append("---")
-                lines.append("")
-        
+                lines.extend(self._build_wechat_stock_digest(result))
+
         # 底部
         lines.append(f"*{labels['report_time_label']}: {datetime.now().strftime('%H:%M')}*")
         models = self._collect_models_used(results)
@@ -1222,6 +1277,74 @@ class NotificationService(
         content = "\n".join(lines)
         
         return content
+
+    def generate_wechat_trend_change_report(
+        self,
+        result: AnalysisResult,
+        previous_trend: str,
+        market_label: str,
+        changed_at: Optional[datetime] = None,
+        recent_trends: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
+        """Generate a compact trend-change alert merged with the latest analysis digest."""
+        report_language = self._get_report_language(result)
+        labels = get_report_labels(report_language)
+        signal_text, signal_emoji, _ = self._get_signal_level(result)
+        display_name = self._get_display_name(result, report_language)
+        trend_label = "Trend" if report_language == "en" else "趋势"
+        title_suffix = "Trend Change Alert" if report_language == "en" else "趋势变化提醒"
+        score_label = "Composite Score" if report_language == "en" else "综合评分"
+        recent_trend_heading = "Recent 5 Trends" if report_language == "en" else "近5次趋势记录"
+        previous_display = (
+            localize_trend_prediction(previous_trend, report_language)
+            if previous_trend
+            else ("Unknown" if report_language == "en" else "未知")
+        )
+        current_display = localize_trend_prediction(result.trend_prediction, report_language)
+        report_dt = changed_at or datetime.now()
+        market_title = f"{market_label}{title_suffix}" if market_label else title_suffix
+
+        lines = [
+            f"## 📈 {report_dt.strftime('%Y-%m-%d')} {market_title}",
+            "",
+            f"### {signal_emoji} {signal_text} | {display_name}({result.code})",
+            "",
+            f"> {trend_label}: {previous_display} → {current_display} | {score_label} {result.sentiment_score}",
+            "",
+        ]
+
+        lines.extend(
+            self._build_wechat_stock_digest(
+                result,
+                include_title=False,
+                include_info_lines=False,
+                exclude_news_related_items=True,
+                preserve_sniper_reason=True,
+                multiline_sniper_points=True,
+            )
+        )
+
+        if recent_trends:
+            lines.append(f"**{recent_trend_heading}**:")
+            for item in recent_trends[:5]:
+                trend_value = localize_trend_prediction(item.get("trend"), report_language)
+                advice_value = localize_operation_advice(item.get("advice"), report_language)
+                timestamp = str(item.get("time") or "").strip()
+                score = item.get("score")
+                if score in (None, ""):
+                    score = "N/A"
+                lines.append(
+                    f"   • {timestamp} | {trend_value} | {advice_value} | {score_label} {score}"
+                )
+            lines.append("")
+
+        lines.append(f"*{labels['report_time_label']}: {report_dt.strftime('%H:%M')}*")
+
+        model_used = normalize_model_used(getattr(result, "model_used", None))
+        if model_used:
+            lines.append(f"*{labels['analysis_model_label']}: {model_used}*")
+
+        return "\n".join(lines)
     
     def generate_wechat_summary(self, results: List[AnalysisResult]) -> str:
         """

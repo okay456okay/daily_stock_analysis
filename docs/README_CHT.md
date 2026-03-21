@@ -105,6 +105,7 @@
 | `EMAIL_PASSWORD` | 郵箱授權碼（非登錄密碼） | 可選 |
 | `EMAIL_RECEIVERS` | 收件人郵箱（多個用逗號分隔，留空則發給自己） | 可選 |
 | `WECHAT_WEBHOOK_URL` | 企業微信 Webhook URL | 可選 |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | crontab 趨勢變化專用企業微信 Webhook；附帶最新一次分析摘要與近5次趨勢記錄 | 可選 |
 | `FEISHU_WEBHOOK_URL` | 飛書 Webhook URL | 可選 |
 | `PUSHPLUS_TOKEN` | PushPlus Token（[獲取地址](https://www.pushplus.plus)，國內推送服務） | 可選 |
 | `SERVERCHAN3_SENDKEY` | Server酱³ Sendkey（[獲取地址](https://sc3.ft07.com/)，手機軟體推播服務） | 可选 |

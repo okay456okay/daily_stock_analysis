@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - 💼 **持仓账本并发写入串行化**（#742）— 持仓源事件写入/删除现在会在 SQLite 下先获取串行化写锁，减少并发卖出把超售流水写入账本的窗口；直接持仓写接口在锁竞争时返回 `409 portfolio_busy`，CSV 导入保持逐条提交并把 busy 计入 `failed_count`。
 - 🚀 **Agent 与普通分析模型解耦（Issue #692）** — 新增 `AGENT_LITELLM_MODEL`（留空继承 `LITELLM_MODEL`，无前缀按 `openai/<model>` 归一）；Agent 执行链路与 `/api/v1/agent/models` 的 `is_primary/is_fallback` 标记改为基于 Agent 实际模型链路；系统配置与启动期校验补齐 `AGENT_LITELLM_MODEL` 的 `unknown_model/missing_runtime_source` 检查；Web 设置页新增 Agent 主模型选择并与渠道模式运行时配置同步。
 - 🌍 **报告输出语言可配置**（Issue #758）— 新增 `REPORT_LANGUAGE=zh|en`，默认 `zh`；语言设置会同步注入普通分析与 Agent Prompt，并覆盖 Markdown/Jinja 模板、通知 fallback、历史/API `report_language` 元数据及 Web 报告页固定文案，避免“英文内容 + 中文壳子”的混合输出。
+- 📬 **趋势变化提醒支持独立企微 Webhook 与最新摘要整合** — 新增 `TREND_CHANGE_WECHAT_WEBHOOK_URL`，`scripts/crontab/analyze_{cn,hk,us,crypto}.sh` 检测到趋势变化时会发送独立提醒，不再复用 `WECHAT_WEBHOOK_URL`；消息体改为整合“趋势变化 + 最新一次分析摘要 + 近5次趋势记录”的简洁样式，直接展示当前建议、核心结论、关键点位、持仓建议与最近趋势轨迹。
 
 ### 文档
 

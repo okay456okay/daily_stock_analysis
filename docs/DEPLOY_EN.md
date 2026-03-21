@@ -195,6 +195,7 @@ journalctl -u stock-analyzer -f
 | `SCHEDULE_ENABLED` | `false` | Enable scheduled tasks |
 | `SCHEDULE_TIME` | `18:00` | Daily execution time |
 | `MARKET_REVIEW_ENABLED` | `true` | Enable market review |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | - | Dedicated WeChat Work webhook for trend-change alerts with the latest analysis digest and recent 5 trend records |
 | `TAVILY_API_KEYS` | - | News search (optional) |
 | `MINIMAX_API_KEYS` | - | MiniMax search (optional) |
 
@@ -351,6 +352,7 @@ Add these Secrets:
 |------------|------|------|
 | `GEMINI_API_KEY` | Gemini AI API Key | ✅ |
 | `WECHAT_WEBHOOK_URL` | WeChat Work Bot Webhook | Optional* |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | Dedicated WeChat Work webhook for crontab trend-change alerts | Optional |
 | `FEISHU_WEBHOOK_URL` | Feishu Bot Webhook | Optional* |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | Optional* |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional* |

@@ -207,6 +207,7 @@ journalctl -u stock-analyzer -f
 | `SCHEDULE_ENABLED` | `false` | 是否启用定时任务 |
 | `SCHEDULE_TIME` | `18:00` | 每日执行时间 |
 | `MARKET_REVIEW_ENABLED` | `true` | 是否启用大盘复盘 |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | - | 定时脚本趋势变化专用企业微信 Webhook（附带最新一次分析摘要与近5次趋势记录） |
 | `TAVILY_API_KEYS` | - | 新闻搜索（可选） |
 | `MINIMAX_API_KEYS` | - | MiniMax 搜索（可选） |
 
@@ -363,6 +364,7 @@ git push -u origin main
 |------------|------|------|
 | `GEMINI_API_KEY` | Gemini AI API Key | ✅ |
 | `WECHAT_WEBHOOK_URL` | 企业微信机器人 Webhook | 可选* |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | 定时脚本趋势变化专用企业微信 Webhook | 可选 |
 | `FEISHU_WEBHOOK_URL` | 飞书机器人 Webhook | 可选* |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | 可选* |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选* |

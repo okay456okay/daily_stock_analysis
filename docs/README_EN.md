@@ -108,6 +108,7 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 | `EMAIL_PASSWORD` | Email authorization code (not login password) | Optional |
 | `EMAIL_RECEIVERS` | Receiver emails (comma-separated, leave empty to send to yourself) | Optional |
 | `WECHAT_WEBHOOK_URL` | WeChat Work Webhook URL | Optional |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | Dedicated WeChat Work webhook for crontab trend-change alerts with the latest analysis digest and recent 5 trend records | Optional |
 | `FEISHU_WEBHOOK_URL` | Feishu Webhook URL | Optional |
 | `PUSHPLUS_TOKEN` | PushPlus Token ([Get it here](https://www.pushplus.plus), Chinese push service) | Optional |
 | `SERVERCHAN3_SENDKEY` | ServerChan v3 SendKey (([Get it here](https://sc3.ft07.com/), Mobile app push notification service) ) | Optional |
@@ -283,6 +284,7 @@ EMAIL_RECEIVERS=receiver@example.com  # Optional
 WeChat Work:
 ```bash
 WECHAT_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx
+TREND_CHANGE_WECHAT_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=yyy  # optional
 ```
 
 Feishu:

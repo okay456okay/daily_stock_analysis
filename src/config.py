@@ -535,6 +535,7 @@ class Config:
     
     # 企业微信 Webhook
     wechat_webhook_url: Optional[str] = None
+    trend_change_wechat_webhook_url: Optional[str] = None  # 趋势变化专用企业微信 Webhook（仅 crontab 趋势提醒）
     
     # 飞书 Webhook
     feishu_webhook_url: Optional[str] = None
@@ -1153,6 +1154,7 @@ class Config:
             ),
             agent_event_alert_rules_json=os.getenv('AGENT_EVENT_ALERT_RULES_JSON', ''),
             wechat_webhook_url=os.getenv('WECHAT_WEBHOOK_URL'),
+            trend_change_wechat_webhook_url=os.getenv('TREND_CHANGE_WECHAT_WEBHOOK_URL'),
             feishu_webhook_url=os.getenv('FEISHU_WEBHOOK_URL'),
             telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN'),
             telegram_chat_id=os.getenv('TELEGRAM_CHAT_ID'),

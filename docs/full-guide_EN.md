@@ -69,6 +69,7 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 | Secret Name | Description | Required |
 |------------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | WeChat Work Webhook URL | Optional |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | Dedicated WeChat Work webhook for crontab trend-change alerts; sends “trend change + latest analysis digest + recent 5 trend records” only | Optional |
 | `FEISHU_WEBHOOK_URL` | Feishu Webhook URL | Optional |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token (get from @BotFather) | Optional |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional |
@@ -86,6 +87,8 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 | `WEBHOOK_VERIFY_SSL` | Verify Webhook HTTPS certificates (default true). Set to false for self-signed certs. WARNING: Disabling has serious security risk (MITM), use only on trusted internal networks | Optional |
 
 > *Note: Configure at least one channel; multiple channels will all receive notifications
+>
+> `TREND_CHANGE_WECHAT_WEBHOOK_URL` is separate from regular analysis push routing and is only used by `scripts/crontab/analyze_{cn,hk,us,crypto}.sh` when a trend change is detected.
 
 #### Push Behavior Configuration
 
@@ -175,6 +178,7 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 | Variable | Description | Required |
 |--------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | WeChat Work Bot Webhook URL | Optional |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | Dedicated WeChat Work webhook for crontab trend-change alerts with the latest analysis digest and recent 5 trend records | Optional |
 | `FEISHU_WEBHOOK_URL` | Feishu Bot Webhook URL | Optional |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | Optional |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional |
@@ -440,6 +444,7 @@ crontab -e
 1. Add "Group Bot" in WeChat Work group chat
 2. Copy Webhook URL
 3. Set `WECHAT_WEBHOOK_URL`
+4. (Optional) Set `TREND_CHANGE_WECHAT_WEBHOOK_URL` if trend-change alerts should go to a separate WeChat Work bot
 
 ### Feishu
 

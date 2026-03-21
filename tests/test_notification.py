@@ -19,6 +19,7 @@ import sys
 import unittest
 from unittest import mock
 from typing import Optional
+from datetime import datetime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -219,6 +220,79 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
         mock_render.assert_not_called()
         self.assertIn("贵州茅台", out)
         self.assertIn("600519", out)
+
+    @mock.patch("src.notification.get_config")
+    def test_generate_wechat_trend_change_report_merges_latest_digest(self, mock_get_config: mock.MagicMock):
+        mock_get_config.return_value = _make_config(report_renderer_enabled=False, report_language="zh")
+        service = NotificationService(initialize_channels=False)
+        result = AnalysisResult(
+            code="002594",
+            name="比亚迪",
+            sentiment_score=78,
+            trend_prediction="看多",
+            operation_advice="买入",
+            decision_type="buy",
+            analysis_summary="多头结构延续，适合顺势观察回踩机会。",
+            model_used="deepseek/deepseek-chat",
+            dashboard={
+                "core_conclusion": {
+                    "one_sentence": "比亚迪强势多头排列，价格回踩MA5支撑，是理想买入时机",
+                    "position_advice": {
+                        "no_position": "可买入，轻仓介入",
+                        "has_position": "持有或逢低加仓",
+                    },
+                },
+                "intelligence": {
+                    "earnings_outlook": "暂无数据",
+                    "sentiment_summary": "技术面强势，但新闻面未知，需关注后续消息面变化",
+                    "risk_alerts": ["筹码分散", "新闻数据缺失"],
+                    "positive_catalysts": ["强势多头排列", "技术面强势"],
+                },
+                "battle_plan": {
+                    "sniper_points": {
+                        "ideal_buy": "103.00-103.50（MA5附近）",
+                        "stop_loss": "96.70（MA20下方）",
+                        "take_profit": "106.66（前高阻力）",
+                    },
+                    "action_checklist": [
+                        "⚠️ 筹码分散（90%集中度56.6%）",
+                        "❌ 新闻数据缺失",
+                    ],
+                },
+            },
+        )
+
+        out = service.generate_wechat_trend_change_report(
+            result=result,
+            previous_trend="震荡",
+            market_label="A股",
+            changed_at=datetime(2026, 3, 21, 16, 27),
+            recent_trends=[
+                {"time": "03-21 16:27", "trend": "看多", "advice": "买入", "score": 78},
+                {"time": "03-20 16:11", "trend": "震荡", "advice": "观望", "score": 61},
+                {"time": "03-19 16:06", "trend": "看多", "advice": "持有", "score": 70},
+                {"time": "03-18 16:03", "trend": "震荡", "advice": "观望", "score": 55},
+                {"time": "03-17 15:58", "trend": "看空", "advice": "减仓", "score": 35},
+            ],
+        )
+
+        self.assertIn("A股趋势变化提醒", out)
+        self.assertIn("震荡 → 看多", out)
+        self.assertIn("比亚迪(002594)", out)
+        self.assertIn("📌", out)
+        self.assertIn("🆕 空仓者: 可买入，轻仓介入", out)
+        self.assertIn("分析模型: deepseek/deepseek-chat", out)
+        self.assertIn("⚠️ 筹码分散", out)
+        self.assertIn("综合评分 78", out)
+        self.assertIn("🎯理想买入点:103.00-103.50（MA5附近）", out)
+        self.assertIn("🛑止损位:96.70（MA20下方）", out)
+        self.assertIn("🎊目标位:106.66（前高阻力）", out)
+        self.assertIn("近5次趋势记录", out)
+        self.assertIn("03-20 16:11 | 震荡 | 观望 | 综合评分 61", out)
+        self.assertNotIn("1 只股票", out)
+        self.assertNotIn("业绩预期", out)
+        self.assertNotIn("舆情情绪", out)
+        self.assertNotIn("新闻数据缺失", out)
 
     @mock.patch("src.notification.get_config")
     def test_generate_dashboard_report_localizes_english_fallback(self, mock_get_config: mock.MagicMock):

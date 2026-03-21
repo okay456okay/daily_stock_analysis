@@ -69,6 +69,7 @@ daily_stock_analysis/
 | Secret 名称 | 说明 | 必填 |
 |------------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | 企业微信 Webhook URL | 可选 |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | 定时脚本趋势变化专用企业微信 Webhook；只接收“趋势变化 + 最新一次分析摘要 + 近5次趋势记录”提醒 | 可选 |
 | `FEISHU_WEBHOOK_URL` | 飞书 Webhook URL | 可选 |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（@BotFather 获取） | 可选 |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选 |
@@ -87,6 +88,8 @@ daily_stock_analysis/
 | `WEBHOOK_VERIFY_SSL` | Webhook HTTPS 证书校验（默认 true）。设为 false 可支持自签名证书。警告：关闭有严重安全风险（MITM），仅限可信内网 | 可选 |
 
 > *注：至少配置一个渠道，配置多个则同时推送
+>
+> `TREND_CHANGE_WECHAT_WEBHOOK_URL` 不参与常规分析推送选路，仅供 `scripts/crontab/analyze_{cn,hk,us,crypto}.sh` 在检测到趋势变化时发送专用提醒。
 
 #### 推送行为配置
 
@@ -188,6 +191,7 @@ daily_stock_analysis/
 | 变量名 | 说明 | 必填 |
 |--------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | 企业微信机器人 Webhook URL | 可选 |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | 定时脚本趋势变化专用企业微信 Webhook；附带最新一次分析摘要与近5次趋势记录 | 可选 |
 | `FEISHU_WEBHOOK_URL` | 飞书机器人 Webhook URL | 可选 |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | 可选 |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选 |
@@ -529,6 +533,7 @@ crontab -e
 1. 在企业微信群聊中添加"群机器人"
 2. 复制 Webhook URL
 3. 设置 `WECHAT_WEBHOOK_URL`
+4. （可选）若希望趋势变化提醒发送到独立群机器人，再设置 `TREND_CHANGE_WECHAT_WEBHOOK_URL`
 
 ### 飞书
 

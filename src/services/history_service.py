@@ -157,6 +157,17 @@ class HistoryService:
         # Fall back to query_id lookup
         return self.db.get_latest_analysis_by_query_id(record_id)
 
+    def build_analysis_result_from_record(self, record) -> Optional[AnalysisResult]:
+        """Rebuild an AnalysisResult from a history ORM record."""
+        if not record:
+            return None
+
+        raw_result = parse_json_field(getattr(record, "raw_result", None))
+        if not raw_result:
+            return None
+
+        return self._rebuild_analysis_result(raw_result, record)
+
     def resolve_and_get_detail(self, record_id: str) -> Optional[Dict[str, Any]]:
         """
         Resolve record_id (int PK or query_id string) and return history detail.
@@ -461,17 +472,8 @@ class HistoryService:
             logger.warning(f"get_markdown_report: record not found for {record_id}")
             return None
 
-        # Rebuild AnalysisResult from raw_result
-        raw_result = parse_json_field(record.raw_result)
-        if not raw_result:
-            logger.error(f"get_markdown_report: raw_result is empty for {record_id}")
-            raise MarkdownReportGenerationError(
-                f"raw_result is empty or invalid for record {record_id}",
-                record_id=record_id
-            )
-
         try:
-            result = self._rebuild_analysis_result(raw_result, record)
+            result = self.build_analysis_result_from_record(record)
         except Exception as e:
             logger.error(f"get_markdown_report: failed to rebuild AnalysisResult for {record_id}: {e}", exc_info=True)
             raise MarkdownReportGenerationError(
@@ -480,6 +482,7 @@ class HistoryService:
             ) from e
 
         if not result:
+            logger.error(f"get_markdown_report: raw_result is empty for {record_id}")
             logger.error(f"get_markdown_report: _rebuild_analysis_result returned None for {record_id}")
             raise MarkdownReportGenerationError(
                 f"Failed to rebuild AnalysisResult from raw_result",

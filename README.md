@@ -120,6 +120,7 @@
 | Secret 名称 | 说明 | 必填 |
 |------------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | 企业微信 Webhook URL | 可选 |
+| `TREND_CHANGE_WECHAT_WEBHOOK_URL` | 定时脚本趋势变化专用企业微信 Webhook；只接收“趋势变化 + 最新一次分析摘要 + 近5次趋势记录”提醒 | 可选 |
 | `FEISHU_WEBHOOK_URL` | 飞书 Webhook URL | 可选 |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（@BotFather 获取） | 可选 |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选 |
@@ -157,6 +158,8 @@
 | `MARKDOWN_TO_IMAGE_MAX_CHARS` | 超过此长度不转图片，避免超大图片（默认 `15000`） | 可选 |
 | `MD2IMG_ENGINE` | 转图引擎：`wkhtmltoimage`（默认）或 `markdown-to-file`（emoji 更好） | 可选 |
 
+> 定时脚本若需要把趋势变化提醒发到独立企微群，可额外配置 `TREND_CHANGE_WECHAT_WEBHOOK_URL`；该提醒不会复用 `WECHAT_WEBHOOK_URL`，并会合并展示“趋势变化 + 最新一次分析摘要 + 近5次趋势记录”。
+>
 > 至少配置一个渠道，配置多个则同时推送。图片发送与引擎安装细节请参考 [完整指南](docs/full-guide.md)
 
 </details>
