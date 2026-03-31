@@ -1304,12 +1304,22 @@ class NotificationService(
         report_dt = changed_at or datetime.now()
         market_title = f"{market_label}{title_suffix}" if market_label else title_suffix
 
+        price_info = ""
+        if result.current_price is not None:
+            price_label = "Price" if report_language == "en" else "当前价格"
+            price_info = f" | {price_label} {result.current_price:.2f}"
+            if result.change_pct is not None:
+                sign = "+" if result.change_pct > 0 else ""
+                price_info += f" ({sign}{result.change_pct:.2f}%)"
+            if result.market_snapshot and result.market_snapshot.get("price_date"):
+                price_info += f" [{result.market_snapshot['price_date']}]"
+
         lines = [
             f"## 📈 {report_dt.strftime('%Y-%m-%d')} {market_title}",
             "",
             f"### {signal_emoji} {signal_text} | {display_name}({result.code})",
             "",
-            f"> {trend_label}: {previous_display} → {current_display} | {score_label} {result.sentiment_score}",
+            f"> {trend_label}: {previous_display} → {current_display} | {score_label} {result.sentiment_score}{price_info}",
             "",
         ]
 

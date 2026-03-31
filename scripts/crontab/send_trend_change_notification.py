@@ -19,7 +19,7 @@ from src.analyzer import AnalysisResult
 from src.config import get_config
 from src.notification import NotificationService
 from src.notification_sender.wechat_sender import WechatSender
-from src.storage import AnalysisHistory, DatabaseManager
+from src.storage import AnalysisHistory, DatabaseManager, StockDaily, CryptoKline
 from src.services.history_service import HistoryService
 
 
@@ -78,6 +78,44 @@ def _load_recent_trends(db: DatabaseManager, history_service: HistoryService, re
     return trends
 
 
+def _get_latest_price_info(db: DatabaseManager, code: str):
+    """Get latest price and date from stock_daily or crypto_kline table."""
+    with db.get_session() as session:
+        # Try crypto first (check if code looks like crypto symbol)
+        if code.isupper() and len(code) >= 6:
+            latest_crypto = session.execute(
+                select(CryptoKline)
+                .where(CryptoKline.code == code)
+                .order_by(desc(CryptoKline.open_time))
+                .limit(1)
+            ).scalar_one_or_none()
+
+            if latest_crypto:
+                return {
+                    "price": latest_crypto.close,
+                    "date": latest_crypto.open_time,
+                    "pct_chg": latest_crypto.pct_chg,
+                    "is_crypto": True,
+                }
+
+        # Try stock daily
+        latest_stock = session.execute(
+            select(StockDaily)
+            .where(StockDaily.code == code)
+            .order_by(desc(StockDaily.date))
+            .limit(1)
+        ).scalar_one_or_none()
+
+        if latest_stock:
+            return {
+                "price": latest_stock.close,
+                "date": latest_stock.date,
+                "pct_chg": latest_stock.pct_chg,
+                "is_crypto": False,
+            }
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Send a trend-change alert to a dedicated WeChat webhook.")
     parser.add_argument("--record-id", type=int, required=True, help="Primary key ID in analysis_history")
@@ -103,6 +141,24 @@ def main() -> int:
     if not result.success:
         logger.error("分析历史记录 id=%s 标记为失败，拒绝发送趋势变化提醒", args.record_id)
         return 1
+
+    # Get latest price info from stock_daily or crypto_kline table
+    price_info = _get_latest_price_info(db, record.code)
+    if price_info:
+        result = replace(
+            result,
+            current_price=price_info["price"],
+            change_pct=price_info["pct_chg"],
+        )
+        if price_info["date"]:
+            if not result.market_snapshot:
+                result.market_snapshot = {}
+            # Format date based on market type
+            if price_info.get("is_crypto"):
+                result.market_snapshot["price_date"] = price_info["date"].strftime("%m-%d %H:%M")
+            else:
+                result.market_snapshot["price_date"] = price_info["date"].strftime("%Y-%m-%d")
+
     recent_trends = _load_recent_trends(db, history_service, record)
 
     formatter = NotificationService(initialize_channels=False)
